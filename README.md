@@ -1,1 +1,1 @@
-# Research-Workshops-Rashomon-MIMIC-Machine-Learning
+# Research Workshops Rashomon Machine Learning
