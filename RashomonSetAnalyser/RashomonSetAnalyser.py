@@ -16,8 +16,12 @@ class RashomonSetAnalyser:
         argument: list: ['model_name', model_object]
         example: ['model_base', RandomForestClassifier(n_estimators = 30)]
         """
-        self.base_model = base_model
         
+        
+        if(type(base_model)!=list):
+            self.base_model=["model_base",base_model]
+        else:
+            self.base_model = base_model
     
     def set_models(self, models):
         """
@@ -27,7 +31,12 @@ class RashomonSetAnalyser:
         argument: list of such lists: ['model_name', model_object]
         example: [['model1', RandomForestClassifier(n_estimators = 10)], ['model2', RandomForestClassifier(n_estimators = 20)]]
         """
+       
         self.models = models
+        
+        if(type(models[0])!=list):
+            for i in range(len(models)):
+                self.models[i]=(["model"+str(i),models[i]])
         
         
     def fit(self, X, y, *args, **kwargs):
