@@ -13,8 +13,8 @@ class RashomonSetAnalyser:
         If you want to use created (and maybe fitted before) models, you can assign them to class attributes with this method.
         With this method you assign base model (the best one)
         
-        argument: list: ['model_name', model_object]
-        example: ['model_base', RandomForestClassifier(n_estimators = 30)]
+        argument: list: ['model_name', model_object] or model_object
+        example: ['model_base', RandomForestClassifier(n_estimators = 30)] or  RandomForestClassifier(n_estimators = 30)
         """
         
         
@@ -28,8 +28,8 @@ class RashomonSetAnalyser:
         If you want to use created (and maybe fitted before) models, you can assign them to class attributes with this method.
         With this method you assign all models but the best one
         
-        argument: list of such lists: ['model_name', model_object]
-        example: [['model1', RandomForestClassifier(n_estimators = 10)], ['model2', RandomForestClassifier(n_estimators = 20)]]
+        argument: list of such lists: ['model_name', model_object] or model_object
+        example: [['model1', RandomForestClassifier(n_estimators = 10)], ['model2', RandomForestClassifier(n_estimators = 20)]] or  [RandomForestClassifier(n_estimators = 20), RandomForestClassifier(n_estimators = 30)]
         """
        
         self.models = models
@@ -205,7 +205,7 @@ class RashomonSetAnalyser:
         self.pdp_measures = df
         return df
     
-    
+        
     def pdp_comparator_change_metric(self, metric):
         """
         You can use this method only if pdp_comparator was ran with parameter save_model_profiles=True
@@ -250,3 +250,45 @@ class RashomonSetAnalyser:
             
         self.pdp_measures = df
         return df
+    
+    
+    def generate_plots(self):
+        """
+        You can use this method only if pdp_comparator was ran.
+        It generates barplots visualising results of comparator for all models.
+        The method requires mtplotlib.pyplot installed
+        """
+        import matplotlib.pyplot as plt
+        
+        if self.pdp_measures is None:
+            raise Exception("Model profiles don't exist. Run pdp_comparator first.")
+            
+        labels=[" "]*self.pdp_measures.shape[0]
+        
+        for i in range(self.pdp_measures.shape[1]-1):
+            fig, ax = plt.subplots()
+            plt.bar(x=self.pdp_measures.iloc[:,0],height=self.pdp_measures.iloc[:,1+i])
+            ax.set_xticklabels(labels)
+            ax.set_title(self.pdp_measures.columns[i+1])
+            plt.show()
+
+    def sum_plot(self):
+        """
+        You can use this method only if pdp_comparator was ran.
+        It generates barplots visualising sums of values for each model returned by comparator.
+        The method requires mtplotlib.pyplot installed
+        """
+        import matplotlib.pyplot as plt
+        
+        if self.pdp_measures is None:
+            raise Exception("Model profiles don't exist. Run pdp_comparator first.")
+        sums=[]
+        names=[]
+        for i in range(self.pdp_measures.shape[1]-1):
+            print(sum(self.pdp_measures.iloc[:,i+1]))
+            sums.append(sum(self.pdp_measures.iloc[:,1+i]))
+            names.append("model"+str(i))
+        fig, ax = plt.subplots()
+        fig.set_size_inches(self.pdp_measures.shape[1]-1, 10.5)
+        plt.bar(height=sums,x=names)
+        
