@@ -135,9 +135,27 @@ class RashomonSetAnalyser:
             m.set_params(**self.rashomon_search_results.params[i + 1])
             
             self.models.append(["Model " + str(i + 1), m])
+            
+    @staticmethod
+    def distance_function_generator(metric):
+        import numpy as np
+        from scipy.stats import kurtosis, skew
+        
+        if metric == 'abs_sum':
+            return lambda x_base, y_base, x_new, y_new: np.sum(np.abs(y_base - y_new))
+        elif metric == 'sum':
+            return lambda x_base, y_base, x_new, y_new: np.sum(y_base - y_new)
+        elif metric == 'integrate':
+            return lambda x_base, y_base, x_new, y_new: np.sum((y_base - y_new) * x_new)
+        elif metric == 'kurtosis':
+            return lambda x_base, y_base, x_new, y_new: kurtosis(y_new)
+        elif metric == 'skewness':
+            return lambda x_base, y_base, x_new, y_new: skew(y_new)
+        else:
+            return lambda x_base, y_base, x_new, y_new: metric(x_base, y_base, x_new, y_new)
         
     
-    def pdp_comparator(self, X, y, metric = 'abs_sum', save_model_profiles = False, variables = None):
+    def pdp_comparator(self, X, y, metric = 'abs_sum', save_model_profiles = False, variables = None, calculate_metric_for_base_model = False):
         """
         Compares pdp profiles with given metric.
         You can save (inside this object) model profiles from dalex if save_model_profiles set to True.
@@ -148,18 +166,8 @@ class RashomonSetAnalyser:
         import dalex as dx
         import pandas as pd
         import numpy as np
-       
-        def distance_function_generator(metric):
-            if metric == 'abs_sum':
-                return lambda x_base, y_base, x_new, y_new: np.sum(np.abs(y_base - y_new))
-            elif metric == 'sum':
-                return lambda x_base, y_base, x_new, y_new: np.sum(y_base - y_new)
-            elif metric == 'integrate':
-                return lambda x_base, y_base, x_new, y_new: np.sum((y_base - y_new) * x_new) 
-            else:
-                return lambda x_base, y_base, x_new, y_new: metric(x_base, y_base, x_new, y_new)
         
-        distance = distance_function_generator(metric)
+        distance = RashomonSetAnalyser.distance_function_generator(metric)
         
         profile_base = dx.Explainer(self.base_model[1], X, y, label = self.base_model[0], verbose = False)
         
@@ -201,12 +209,20 @@ class RashomonSetAnalyser:
                 self.model_profiles.append(profile)
             else:
                 del profile
+                
+        if calculate_metric_for_base_model:
+            tab_res = []
+            for i in range(len(df.colname)):
+                lower = int(i * sample_length)
+                higher = int((i + 1) * sample_length)
+                tab_res.append(distance(x_base[lower:higher], y_base[lower:higher], x_base[lower:higher], y_base[lower:higher]))
+            df[self.base_model[0]] = tab_res
         
         self.pdp_measures = df
         return df
     
         
-    def pdp_comparator_change_metric(self, metric):
+    def pdp_comparator_change_metric(self, metric, calculate_metric_for_base_model = False):
         """
         You can use this method only if pdp_comparator was ran with parameter save_model_profiles=True
         It calculates results with new metric efficiently
@@ -216,18 +232,8 @@ class RashomonSetAnalyser:
         
         if self.model_profiles is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator with parameter save_model_profiles = True to use this method.")
-        
-        def distance_function_generator(metric):
-            if metric == 'abs_sum':
-                return lambda x_base, y_base, x_new, y_new: np.sum(np.abs(y_base - y_new))
-            elif metric == 'sum':
-                return lambda x_base, y_base, x_new, y_new: np.sum(y_base - y_new)
-            elif metric == 'integrate':
-                return lambda x_base, y_base, x_new, y_new: np.sum((y_base - y_new) * x_new) 
-            else:
-                return lambda x_base, y_base, x_new, y_new: metric(x_base, y_base, x_new, y_new)
             
-        distance = distance_function_generator(metric)
+        distance = RashomonSetAnalyser.distance_function_generator(metric)
         
         profile_base = self.model_profiles[0]
         y_base = profile_base.result._yhat_
@@ -248,47 +254,147 @@ class RashomonSetAnalyser:
             
             df[self.models[j - 1][0]] = tab_res
             
+        if calculate_metric_for_base_model:
+            tab_res = []
+            for i in range(len(df.colname)):
+                lower = int(i * sample_length)
+                higher = int((i + 1) * sample_length)
+                tab_res.append(distance(x_base[lower:higher], y_base[lower:higher], x_base[lower:higher], y_base[lower:higher]))
+            df[self.base_model[0]] = tab_res
+            
         self.pdp_measures = df
         return df
     
     
-    def generate_plots(self):
+    def show_results(self, xlabels = False, model_names = None, features = None, figsize = (8, 8)):
         """
-        You can use this method only if pdp_comparator was ran.
+        You can use this method only if pdp_comparator was run.
         It generates barplots visualising results of comparator for all models.
         The method requires mtplotlib.pyplot installed
+        
+        If xlabels = True, the xlabels will be displayed
+        You can choose models to be displayed by giving names in liast as model_names parameter
         """
         import matplotlib.pyplot as plt
+        import seaborn as sns
+        import pandas as pd
         
         if self.pdp_measures is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator first.")
             
-        labels=[" "]*self.pdp_measures.shape[0]
+        if features is None:
+            features = self.pdp_measures.colname.tolist()
         
-        for i in range(self.pdp_measures.shape[1]-1):
-            fig, ax = plt.subplots()
-            plt.bar(x=self.pdp_measures.iloc[:,0],height=self.pdp_measures.iloc[:,1+i])
+        labels = []
+        if xlabels:
+            labels = self.pdp_measures[self.pdp_measures['colname'].isin(features)].colname.tolist()
+        
+        if model_names is None:
+            model_names = self.pdp_measures.columns.tolist()[1:]
+                
+        for i in model_names:
+            fig, ax = plt.subplots(figsize = figsize)
+            tmp = pd.DataFrame({'x': self.pdp_measures[self.pdp_measures['colname'].isin(features)].colname,
+                               'y': self.pdp_measures[self.pdp_measures['colname'].isin(features)][i]})
+            sns.barplot(data = tmp, x = 'x', y = 'y', color = 'dodgerblue')
             ax.set_xticklabels(labels)
-            ax.set_title(self.pdp_measures.columns[i+1])
+            ax.set_title(i)
+            ax.set_ylabel('')    
+            ax.set_xlabel('')
+
             plt.show()
 
-    def sum_plot(self):
+    def sum_plot(self, model_names = None, features = None, figsize = (8, 8)):
         """
-        You can use this method only if pdp_comparator was ran.
+        You can use this method only if pdp_comparator was run.
         It generates barplots visualising sums of values for each model returned by comparator.
         The method requires mtplotlib.pyplot installed
         """
         import matplotlib.pyplot as plt
+        import seaborn as sns
+        import pandas as pd
         
         if self.pdp_measures is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator first.")
-        sums=[]
-        names=[]
-        for i in range(self.pdp_measures.shape[1]-1):
-            print(sum(self.pdp_measures.iloc[:,i+1]))
-            sums.append(sum(self.pdp_measures.iloc[:,1+i]))
-            names.append("model"+str(i))
-        fig, ax = plt.subplots()
-        fig.set_size_inches(self.pdp_measures.shape[1]-1, 10.5)
-        plt.bar(height=sums,x=names)
         
+        if features is None:
+            features = self.pdp_measures.colname.tolist()
+            
+        sums = []
+        
+        if model_names is None:
+            model_names = self.pdp_measures.columns.tolist()[1:]
+            
+        for i in model_names:
+            sums.append(
+                sum(
+                    self.pdp_measures[self.pdp_measures['colname'].isin(features)][i]
+                ))
+        
+        fig, ax = plt.subplots(figsize = figsize)
+        tmp = pd.DataFrame({'x': model_names, 'sum': sums})
+        sns.barplot(data = tmp, x = 'x', y = 'sum', color = 'dodgerblue')
+        plt.title("Sum plot")
+        ax.set_ylabel('')    
+        ax.set_xlabel('')
+        
+        plt.show()
+        
+    def boxplots(self, xlabels = False, model_names = None, features = None, figsize = (8, 8)):
+        """
+        You can use this function to plot boxplot of results.
+        """
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
+        if self.pdp_measures is None:
+            raise Exception("Model profiles don't exist. Run pdp_comparator first.")
+            
+        if model_names is None:
+            model_names = self.pdp_measures.columns.tolist()[1:]
+        
+        if features is None:
+            features = self.pdp_measures.colname.tolist()
+        
+        labels = []
+        if xlabels:
+            labels = self.pdp_measures[self.pdp_measures['colname'].isin(features)].colname.tolist()
+            
+        tdf = self.pdp_measures[self.pdp_measures['colname'].isin(features)][model_names + ['colname']].set_index('colname').T
+        
+        fig, ax = plt.subplots(figsize = figsize)
+        sns.boxplot(data = tdf, color = 'dodgerblue')
+        plt.title("Boxplots")
+        ax.set_xticklabels(labels)
+        ax.set_ylabel('')    
+        ax.set_xlabel('')
+
+        plt.show()
+        
+    def histograms(self, model_names = None, features = None, figsize = (8, 8)):
+        """
+        You can use this function to plot histograms of results.
+        """
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import pandas as pd
+        
+        if self.pdp_measures is None:
+            raise Exception("Model profiles don't exist. Run pdp_comparator first.")
+            
+        if model_names is None:
+            model_names = self.pdp_measures.columns.tolist()[1:]
+        
+        if features is None:
+            features = self.pdp_measures.colname.tolist()
+            
+        for i in model_names:
+            fig, ax = plt.subplots(figsize = figsize)
+            tmp = pd.DataFrame({'x': self.pdp_measures[self.pdp_measures['colname'].isin(features)].colname,
+                               'y': self.pdp_measures[self.pdp_measures['colname'].isin(features)][i]})
+            sns.histplot(data = tmp, x = 'y', color = 'dodgerblue')
+            ax.set_title(i)
+            ax.set_ylabel('')    
+            ax.set_xlabel('')
+
+            plt.show()
