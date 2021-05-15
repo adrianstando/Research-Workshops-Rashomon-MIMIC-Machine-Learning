@@ -398,3 +398,11 @@ class RashomonSetAnalyser:
             ax.set_xlabel('')
 
             plt.show()
+            
+    def pdp_profile(self, model_names = None, features = None, figsize = (8, 8)):
+        """
+        Function plots pdp profile.
+        TODO
+        """
+        
+        return
