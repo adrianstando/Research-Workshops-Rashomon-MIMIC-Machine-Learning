@@ -399,10 +399,71 @@ class RashomonSetAnalyser:
 
             plt.show()
             
-    def pdp_profile(self, model_names = None, features = None, figsize = (8, 8)):
+    def pdp_profile(self, X, y, model_names = None, features = None, figsize = (8, 8)):
         """
         Function plots pdp profile.
-        TODO
         """
+        import pandas as pd
+        import dalex as dx
+        import matplotlib.pyplot as plt
         
-        return
+        if model_names is None:
+            model_names = self.pdp_measures.columns.tolist()[1:]
+            
+        if features is None:
+            features = self.pdp_measures.colname.tolist()
+            
+        for fe in features:
+        
+            profile_base = dx.Explainer(self.base_model[1], X, y, label = self.base_model[0], verbose = False)
+            profile_base = profile_base.model_profile(verbose = False, variables = [fe])
+        
+            df = pd.DataFrame({'x': profile_base.result._x_, self.base_model[0]: profile_base.result._yhat_})
+        
+            del profile_base
+            plt.subplots(figsize = figsize)
+        
+            for model in self.models:
+                profile = dx.Explainer(model[1], X, y, label = model[0], verbose = False)
+                profile = profile.model_profile(verbose = False, variables = [fe])
+            
+                y_result = profile.result._yhat_
+                
+                df[model[0]] = y_result
+            
+                del profile
+            
+            for col in df.columns[1:]:
+                plt.plot(df['x'], df[col])
+
+            plt.title("PDP curves for feature: " + fe)
+            plt.legend([col for col in df.columns[1:]])
+        
+            plt.show()
+    
+    def boxplots_models(self, model_names = None, features = None, figsize = (8, 8)):
+        """
+        You can use this function to plot boxplot of results for each model.
+        """
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
+        if self.pdp_measures is None:
+            raise Exception("Model profiles don't exist. Run pdp_comparator first.")
+            
+        if model_names is None:
+            model_names = self.pdp_measures.columns.tolist()[1:]
+        
+        if features is None:
+            features = self.pdp_measures.colname.tolist()
+            
+        tdf = self.pdp_measures[self.pdp_measures['colname'].isin(features)][model_names + ['colname']].set_index('colname')
+        
+        fig, ax = plt.subplots(figsize = figsize)
+        sns.boxplot(data = tdf, color = 'dodgerblue')
+        plt.title("Boxplots")
+
+        ax.set_ylabel('')    
+        ax.set_xlabel('')
+
+        plt.show()
