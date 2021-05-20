@@ -1,3 +1,15 @@
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
+import pandas as pd
+import math
+import copy
+import numpy as np
+from scipy.stats import kurtosis, skew
+import dalex as dx
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
 class RashomonSetAnalyser:       
     
     def __init__(self):        
@@ -80,11 +92,6 @@ class RashomonSetAnalyser:
         """
         Searching for best models and choosing [rashomon_ratio %] best.
         """
-        from sklearn.model_selection import GridSearchCV
-        from sklearn.model_selection import RandomizedSearchCV
-        import pandas as pd
-        import math
-        import copy
         
         searcher_object = None
         
@@ -120,8 +127,6 @@ class RashomonSetAnalyser:
         """
         Changing rashomon ratio after generating set of models.
         """
-        import math
-        import copy
         
         if self.rashomon_search_results is None:
             raise Exception("Models were not generated. Run generate_rashomon_set method.")
@@ -138,8 +143,6 @@ class RashomonSetAnalyser:
             
     @staticmethod
     def distance_function_generator(metric):
-        import numpy as np
-        from scipy.stats import kurtosis, skew
         
         if metric == 'abs_sum':
             return lambda x_base, y_base, x_new, y_new: np.sum(np.abs(y_base - y_new))
@@ -163,9 +166,6 @@ class RashomonSetAnalyser:
         
         You can choose a certain subset of features by giving a list of these feature names as a variables parameter. If it's None, all features will be calculated.
         """
-        import dalex as dx
-        import pandas as pd
-        import numpy as np
         
         distance = RashomonSetAnalyser.distance_function_generator(metric)
         
@@ -227,8 +227,6 @@ class RashomonSetAnalyser:
         You can use this method only if pdp_comparator was ran with parameter save_model_profiles=True
         It calculates results with new metric efficiently
         """
-        import pandas as pd
-        import numpy as np
         
         if self.model_profiles is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator with parameter save_model_profiles = True to use this method.")
@@ -275,9 +273,6 @@ class RashomonSetAnalyser:
         If xlabels = True, the xlabels will be displayed
         You can choose models to be displayed by giving names in liast as model_names parameter
         """
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        import pandas as pd
         
         if self.pdp_measures is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator first.")
@@ -310,9 +305,6 @@ class RashomonSetAnalyser:
         It generates barplots visualising sums of values for each model returned by comparator.
         The method requires mtplotlib.pyplot installed
         """
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        import pandas as pd
         
         if self.pdp_measures is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator first.")
@@ -335,7 +327,7 @@ class RashomonSetAnalyser:
         tmp = pd.DataFrame({'x': model_names, 'sum': sums})
         sns.barplot(data = tmp, x = 'x', y = 'sum', color = 'dodgerblue')
         plt.title("Sum plot")
-        ax.set_ylabel('')    
+        ax.set_ylabel('Sum of metric values for features')    
         ax.set_xlabel('')
         
         plt.show()
@@ -344,8 +336,6 @@ class RashomonSetAnalyser:
         """
         You can use this function to plot boxplot of results.
         """
-        import matplotlib.pyplot as plt
-        import seaborn as sns
         
         if self.pdp_measures is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator first.")
@@ -363,11 +353,11 @@ class RashomonSetAnalyser:
         tdf = self.pdp_measures[self.pdp_measures['colname'].isin(features)][model_names + ['colname']].set_index('colname').T
         
         fig, ax = plt.subplots(figsize = figsize)
-        sns.boxplot(data = tdf, color = 'dodgerblue')
+        sns.boxplot(data = tdf, color = 'dodgerblue', orient='h')
         plt.title("Boxplots")
-        ax.set_xticklabels(labels)
+        ax.set_yticklabels(labels)
         ax.set_ylabel('')    
-        ax.set_xlabel('')
+        ax.set_xlabel('Metric value')
 
         plt.show()
         
@@ -375,9 +365,6 @@ class RashomonSetAnalyser:
         """
         You can use this function to plot histograms of results.
         """
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        import pandas as pd
         
         if self.pdp_measures is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator first.")
@@ -403,9 +390,6 @@ class RashomonSetAnalyser:
         """
         Function plots pdp profile.
         """
-        import pandas as pd
-        import dalex as dx
-        import matplotlib.pyplot as plt
         
         if model_names is None:
             model_names = self.pdp_measures.columns.tolist()[1:]
@@ -438,6 +422,7 @@ class RashomonSetAnalyser:
 
             plt.title("PDP curves for feature: " + fe)
             plt.legend([col for col in df.columns[1:]])
+            plt.xlabel(fe)
         
             plt.show()
     
@@ -445,8 +430,6 @@ class RashomonSetAnalyser:
         """
         You can use this function to plot boxplot of results for each model.
         """
-        import matplotlib.pyplot as plt
-        import seaborn as sns
         
         if self.pdp_measures is None:
             raise Exception("Model profiles don't exist. Run pdp_comparator first.")
@@ -463,7 +446,23 @@ class RashomonSetAnalyser:
         sns.boxplot(data = tdf, color = 'dodgerblue')
         plt.title("Boxplots")
 
-        ax.set_ylabel('')    
+        ax.set_ylabel('Metric value')    
         ax.set_xlabel('')
 
+        plt.show()
+        
+        
+    def rashomon_ratio_plot(self, figsize = (8, 8)):      
+        mean_test_score = self.rashomon_search_results.mean_test_score.tolist()
+        
+        counts, bins = np.histogram(mean_test_score, bins=50, range=(0.5, 1))
+        reverse_cum_sum = np.cumsum(counts[::-1])[::-1] 
+        ratio = reverse_cum_sum / len(mean_test_score)
+        ratio = np.append(ratio, 0)
+        
+        plt.subplots(figsize = figsize)
+        sns.lineplot(x = bins, y = ratio)
+        plt.title('Rashomon ratio')
+        plt.xlabel('Mean test score')
+        plt.ylabel('Rashomon ratio')
         plt.show()
