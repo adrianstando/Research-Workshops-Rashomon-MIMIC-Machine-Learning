@@ -452,10 +452,10 @@ class RashomonSetAnalyser:
         plt.show()
         
         
-    def rashomon_ratio_plot(self, figsize = (8, 8)):      
+    def rashomon_ratio_plot(self, figsize = (8, 8), plot_range = (0, 1)):      
         mean_test_score = self.rashomon_search_results.mean_test_score.tolist()
         
-        counts, bins = np.histogram(mean_test_score, bins=50, range=(0.5, 1))
+        counts, bins = np.histogram(mean_test_score, bins=50, range=plot_range)
         reverse_cum_sum = np.cumsum(counts[::-1])[::-1] 
         ratio = reverse_cum_sum / len(mean_test_score)
         ratio = np.append(ratio, 0)
